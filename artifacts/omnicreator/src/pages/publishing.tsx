@@ -26,6 +26,16 @@ const statusConfig: Record<string, { icon: typeof Clock; color: string; label: s
   failed: { icon: XCircle, color: "text-red-600", label: "Failed" },
 };
 
+const PLATFORMS = [
+  { value: "youtube", label: "YouTube" },
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "facebook", label: "Facebook" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "twitter", label: "X (Twitter)" },
+  { value: "pinterest", label: "Pinterest" },
+];
+
 export default function PublishingPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const { orgId, orgName, workspaceName } = useOrgContext(workspaceId);
@@ -34,6 +44,7 @@ export default function PublishingPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [projectId, setProjectId] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [platform, setPlatform] = useState("instagram");
   const [caption, setCaption] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -47,14 +58,19 @@ export default function PublishingPage() {
     mutationFn: () => post(`/api/workspaces/${workspaceId}/publishing`, {
       projectId,
       socialAccountId: accountId || undefined,
-      caption,
-      hashtags: hashtags.split(/[\s,]+/).filter(Boolean),
+      platform,
       scheduledAt: scheduledAt || undefined,
+      metadata: {
+        caption,
+        hashtags: hashtags.split(/[\s,]+/).filter(Boolean),
+      },
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [workspaceId ?? ""] });
       setCreateOpen(false);
       setProjectId("");
+      setAccountId("");
+      setPlatform("instagram");
       setCaption("");
       setHashtags("");
       setScheduledAt("");
@@ -101,21 +117,34 @@ export default function PublishingPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Social account</Label>
+                  <Label>Platform</Label>
+                  <Select value={platform} onValueChange={setPlatform}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PLATFORMS.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Social account <span className="text-muted-foreground">(optional)</span></Label>
                   <Select value={accountId} onValueChange={setAccountId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select an account (optional)" />
+                      <SelectValue placeholder="Select an account" />
                     </SelectTrigger>
                     <SelectContent>
                       {accountList.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
-                          {a.accountName} ({a.platform})
+                          {a.accountName} ({String(a.platform)})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {accountList.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Connect social accounts to publish</p>
+                    <p className="text-xs text-muted-foreground">Connect social accounts in the Social tab to publish directly</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -136,7 +165,7 @@ export default function PublishingPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Schedule (optional)</Label>
+                  <Label>Schedule <span className="text-muted-foreground">(optional)</span></Label>
                   <Input
                     type="datetime-local"
                     value={scheduledAt}

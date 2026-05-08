@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useParams, Link } from "wouter";
-import { useGetProject, useListAiJobs } from "@workspace/api-client-react";
+import { useGetProject } from "@workspace/api-client-react";
 import type { Project, AiJob } from "@workspace/api-client-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { post } from "@/lib/api";
+import { apiRequest, post } from "@/lib/api";
 import { useOrgContext } from "@/hooks/use-org-context";
 import {
   Sparkles, Play, Pause, CheckCircle, XCircle, AlertCircle, Clock, ArrowLeft, Wand2, RefreshCw
@@ -43,16 +43,24 @@ export default function ProjectDetailPage() {
   const [jobError, setJobError] = useState("");
 
   const { data: project, isLoading } = useGetProject(projectId ?? "");
-  const { data: jobs, isLoading: jobsLoading } = useListAiJobs(projectId ?? "");
+
+  const { data: jobs, isLoading: jobsLoading } = useQuery({
+    queryKey: ["project-ai-jobs", workspaceId, projectId],
+    queryFn: () => apiRequest<AiJob[]>(
+      `/api/workspaces/${workspaceId}/ai-jobs?projectId=${projectId}`
+    ),
+    enabled: !!workspaceId && !!projectId,
+  });
 
   const createJob = useMutation({
-    mutationFn: () => post(`/api/projects/${projectId}/ai-jobs`, {
-      type: taskType,
-      provider,
+    mutationFn: () => post(`/api/workspaces/${workspaceId}/ai-jobs`, {
+      taskType,
+      providerKey: provider,
       prompt,
+      projectId,
     }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [projectId ?? ""] });
+      qc.invalidateQueries({ queryKey: ["project-ai-jobs", workspaceId, projectId] });
       setPrompt("");
       setJobError("");
     },
@@ -61,12 +69,12 @@ export default function ProjectDetailPage() {
 
   const cancelJob = useMutation({
     mutationFn: (jobId: string) => post(`/api/ai-jobs/${jobId}/cancel`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [projectId ?? ""] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-ai-jobs", workspaceId, projectId] }),
   });
 
   const retryJob = useMutation({
     mutationFn: (jobId: string) => post(`/api/ai-jobs/${jobId}/retry`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [projectId ?? ""] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-ai-jobs", workspaceId, projectId] }),
   });
 
   if (isLoading) {

@@ -1,6 +1,6 @@
 import { useParams } from "wouter";
-import { useListProjects } from "@workspace/api-client-react";
 import type { AiJob, Project } from "@workspace/api-client-react";
+import { useListProjects } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
@@ -22,24 +22,6 @@ const statusConfig: Record<string, { icon: typeof Clock; color: string; label: s
   draft: { icon: Clock, color: "text-gray-400", label: "Draft" },
 };
 
-function useWorkspaceAiJobs(workspaceId: string, projectIds: string[]) {
-  return useQuery({
-    queryKey: ["workspace-ai-jobs", workspaceId, projectIds.join(",")],
-    queryFn: async (): Promise<AiJob[]> => {
-      if (!projectIds.length) return [];
-      const jobArrays = await Promise.all(
-        projectIds.map((id) =>
-          apiRequest<AiJob[]>(`/api/projects/${id}/ai-jobs`).catch(() => [] as AiJob[])
-        )
-      );
-      return jobArrays.flat().sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    },
-    enabled: projectIds.length > 0,
-  });
-}
-
 export default function AiJobsPage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
   const { orgId, orgName, workspaceName } = useOrgContext(workspaceId);
@@ -47,11 +29,13 @@ export default function AiJobsPage() {
 
   const { data: projects } = useListProjects(workspaceId ?? "");
   const projectList = (projects as Project[] | undefined) ?? [];
-  const projectIds = projectList.slice(0, 20).map((p) => p.id);
-
-  const { data: jobs, isLoading } = useWorkspaceAiJobs(workspaceId ?? "", projectIds);
-
   const projectMap = new Map(projectList.map((p) => [p.id, p.name]));
+
+  const { data: jobs, isLoading } = useQuery({
+    queryKey: ["workspace-ai-jobs", workspaceId],
+    queryFn: () => apiRequest<AiJob[]>(`/api/workspaces/${workspaceId}/ai-jobs`),
+    enabled: !!workspaceId,
+  });
 
   const retryMutation = useMutation({
     mutationFn: (jobId: string) => post(`/api/ai-jobs/${jobId}/retry`, {}),
@@ -63,7 +47,7 @@ export default function AiJobsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workspace-ai-jobs", workspaceId] }),
   });
 
-  const jobList: AiJob[] = jobs ?? [];
+  const jobList: AiJob[] = (jobs as AiJob[] | undefined) ?? [];
   const activeCount = jobList.filter((j) => ["running", "queued"].includes(j.status)).length;
 
   return (
@@ -79,7 +63,7 @@ export default function AiJobsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => qc.invalidateQueries({ queryKey: ["workspace-ai-jobs"] })}
+            onClick={() => qc.invalidateQueries({ queryKey: ["workspace-ai-jobs", workspaceId] })}
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
