@@ -1,8 +1,40 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
+import orgsRouter from "./orgs";
+import workspacesRouter from "./workspaces";
+import membersRouter from "./members";
+import brandKitsRouter from "./brandKits";
+import projectsRouter from "./projects";
+import assetsRouter from "./assets";
+import aiJobsRouter from "./aiJobs";
+import templatesRouter from "./templates";
+import socialRouter from "./social";
+import publishingRouter from "./publishing";
+import analyticsRouter from "./analytics";
+import billingRouter from "./billing";
+import providersRouter from "./providers";
+import dashboardRouter from "./dashboard";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(authRouter);
+router.use(orgsRouter);
+router.use(workspacesRouter);
+router.use(membersRouter);
+router.use(brandKitsRouter);
+router.use(projectsRouter);
+router.use(assetsRouter);
+router.use(aiJobsRouter);
+router.use(templatesRouter);
+router.use(socialRouter);
+router.use(publishingRouter);
+router.use(analyticsRouter);
+router.use(billingRouter);
+router.use(providersRouter);
+router.use(dashboardRouter);
+router.use(adminRouter);
 
 export default router;

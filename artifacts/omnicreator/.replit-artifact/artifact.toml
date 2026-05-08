@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "OmniCreator AI Studio"
+version = "1.0.0"
+id = "artifacts/omnicreator"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20623
+
+[services.development]
+run = "pnpm --filter @workspace/omnicreator run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/omnicreator", "run", "build" ]
+publicDir = "artifacts/omnicreator/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20623"
+BASE_PATH = "/"
