@@ -83,15 +83,16 @@ router.post("/workspaces/:workspaceId/publishing", async (req: Request, res: Res
     ? await db.select().from(socialAccountsTable).where(eq(socialAccountsTable.id, parsed.data.socialAccountId))
     : [null];
 
-  if (!socialAccount || socialAccount.status !== "active") {
+  if (parsed.data.socialAccountId && (!socialAccount || socialAccount.status !== "active")) {
     const [job] = await db.insert(publishingJobsTable).values({
       workspaceId: params.data.workspaceId,
       projectId: parsed.data.projectId,
+      assetId: parsed.data.assetId ?? null,
       socialAccountId: parsed.data.socialAccountId ?? null,
-      platform: (socialAccount?.platform ?? "youtube") as "youtube" | "tiktok" | "instagram" | "facebook" | "linkedin" | "twitter" | "pinterest",
+      platform: parsed.data.platform as "youtube" | "tiktok" | "instagram" | "facebook" | "linkedin" | "twitter" | "pinterest",
       status: "failed",
       scheduledAt: parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null,
-      metadata: { caption: parsed.data.caption, hashtags: parsed.data.hashtags } as Record<string, unknown>,
+      metadata: (parsed.data.metadata ?? {}) as Record<string, unknown>,
       errorMessage: "Social account is not connected or has expired. Please reconnect in Workspace Settings.",
     }).returning();
     res.status(202).json(GetPublishingJobResponse.parse(job));
@@ -103,11 +104,12 @@ router.post("/workspaces/:workspaceId/publishing", async (req: Request, res: Res
   const [job] = await db.insert(publishingJobsTable).values({
     workspaceId: params.data.workspaceId,
     projectId: parsed.data.projectId,
+    assetId: parsed.data.assetId ?? null,
     socialAccountId: parsed.data.socialAccountId ?? null,
-    platform: socialAccount.platform,
+    platform: parsed.data.platform as "youtube" | "tiktok" | "instagram" | "facebook" | "linkedin" | "twitter" | "pinterest",
     status,
     scheduledAt: parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null,
-    metadata: { caption: parsed.data.caption, hashtags: parsed.data.hashtags } as Record<string, unknown>,
+    metadata: (parsed.data.metadata ?? {}) as Record<string, unknown>,
   }).returning();
 
   res.status(202).json(GetPublishingJobResponse.parse(job));

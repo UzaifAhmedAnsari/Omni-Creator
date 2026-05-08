@@ -19,16 +19,7 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-const PLAN_LIMITS: Record<string, { projects: number; storage: number; aiCredits: number }> = {
-  free: { projects: 3, storage: 1024, aiCredits: 10 },
-  creator: { projects: 25, storage: 10240, aiCredits: 100 },
-  pro: { projects: 100, storage: 51200, aiCredits: 500 },
-  studio: { projects: 500, storage: 204800, aiCredits: 2000 },
-  agency: { projects: 2000, storage: 1024000, aiCredits: 10000 },
-  enterprise: { projects: -1, storage: -1, aiCredits: -1 },
-};
-
-router.get("/orgs/:orgId/billing", async (req: Request, res: Response): Promise<void> => {
+router.get("/organizations/:orgId/billing", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = GetBillingInfoParams.safeParse(req.params);
@@ -51,29 +42,19 @@ router.get("/orgs/:orgId/billing", async (req: Request, res: Response): Promise<
     return;
   }
 
-  const limits = PLAN_LIMITS[org.plan] ?? PLAN_LIMITS.free;
-
   res.json(GetBillingInfoResponse.parse({
+    orgId: org.id,
     plan: org.plan,
+    creditsBalance: org.creditsBalance ?? 0,
+    creditsUsedThisPeriod: 0,
+    periodEnd: null,
     stripeCustomerId: org.stripeCustomerId ?? null,
     stripeSubscriptionId: org.stripeSubscriptionId ?? null,
-    currentPeriodEnd: null,
-    cancelAtPeriodEnd: false,
-    limits,
-    usage: {
-      projects: 0,
-      storageBytes: 0,
-      aiCreditsUsed: 0,
-    },
     invoices: [],
-    setupRequired: !process.env.STRIPE_SECRET_KEY,
-    setupMessage: !process.env.STRIPE_SECRET_KEY
-      ? "Stripe is not configured. Add STRIPE_SECRET_KEY to enable billing and plan upgrades."
-      : undefined,
   }));
 });
 
-router.post("/orgs/:orgId/billing/checkout", async (req: Request, res: Response): Promise<void> => {
+router.post("/organizations/:orgId/billing/checkout", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = CreateCheckoutSessionParams.safeParse(req.params);

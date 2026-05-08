@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, count, eq } from "drizzle-orm";
-import { db, usersTable, aiJobsTable } from "@workspace/db";
+import { desc, count, eq, sum } from "drizzle-orm";
+import { db, usersTable, organizationsTable, projectsTable, aiJobsTable } from "@workspace/db";
 import {
   AdminListUsersQueryParams,
   AdminListUsersResponse,
@@ -46,8 +46,6 @@ router.get("/admin/users", async (req: Request, res: Response): Promise<void> =>
   res.json(AdminListUsersResponse.parse({
     users,
     total: total?.count ?? 0,
-    limit: query.data.limit ?? 50,
-    offset: query.data.offset ?? 0,
   }));
 });
 
@@ -70,30 +68,28 @@ router.get("/admin/ai-jobs", async (req: Request, res: Response): Promise<void> 
     .from(aiJobsTable)
     .where(conditions.length ? conditions[0] : undefined)
     .orderBy(desc(aiJobsTable.createdAt))
-    .limit(query.data.limit ?? 50)
-    .offset(query.data.offset ?? 0);
+    .limit(query.data.limit ?? 50);
 
-  const [total] = await db.select({ count: count() }).from(aiJobsTable);
-
-  res.json(AdminListAiJobsResponse.parse({
-    jobs,
-    total: total?.count ?? 0,
-    limit: query.data.limit ?? 50,
-    offset: query.data.offset ?? 0,
-  }));
+  res.json(AdminListAiJobsResponse.parse(jobs));
 });
 
 router.get("/admin/stats", async (req: Request, res: Response): Promise<void> => {
   if (!requireAdmin(req, res)) return;
 
   const [userCount] = await db.select({ count: count() }).from(usersTable);
+  const [orgCount] = await db.select({ count: count() }).from(organizationsTable);
+  const [projectCount] = await db.select({ count: count() }).from(projectsTable);
   const [jobCount] = await db.select({ count: count() }).from(aiJobsTable);
   const [activeJobs] = await db.select({ count: count() }).from(aiJobsTable).where(eq(aiJobsTable.status, "running"));
+  const [creditsResult] = await db.select({ total: sum(aiJobsTable.creditsEstimated) }).from(aiJobsTable);
 
   res.json(GetAdminStatsResponse.parse({
     totalUsers: userCount?.count ?? 0,
+    totalOrgs: orgCount?.count ?? 0,
+    totalProjects: projectCount?.count ?? 0,
     totalAiJobs: jobCount?.count ?? 0,
-    activeAiJobs: activeJobs?.count ?? 0,
+    activeJobs: activeJobs?.count ?? 0,
+    totalCreditsUsed: Number(creditsResult?.total ?? 0),
   }));
 });
 

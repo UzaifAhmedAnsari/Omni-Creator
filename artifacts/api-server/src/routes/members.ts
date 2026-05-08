@@ -23,7 +23,7 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-router.get("/orgs/:orgId/members", async (req: Request, res: Response): Promise<void> => {
+router.get("/organizations/:orgId/members", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = ListOrgMembersParams.safeParse(req.params);
@@ -59,7 +59,7 @@ router.get("/orgs/:orgId/members", async (req: Request, res: Response): Promise<
   res.json(ListOrgMembersResponse.parse(members));
 });
 
-router.post("/orgs/:orgId/members", async (req: Request, res: Response): Promise<void> => {
+router.post("/organizations/:orgId/members", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = InviteMemberParams.safeParse(req.params);
@@ -105,7 +105,7 @@ router.post("/orgs/:orgId/members", async (req: Request, res: Response): Promise
   res.status(201).json({ success: true });
 });
 
-router.patch("/orgs/:orgId/members/:memberId", async (req: Request, res: Response): Promise<void> => {
+router.patch("/organizations/:orgId/members/:memberId", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = UpdateMemberRoleParams.safeParse(req.params);
@@ -142,7 +142,7 @@ router.patch("/orgs/:orgId/members/:memberId", async (req: Request, res: Respons
   res.json(UpdateMemberRoleResponse.parse(updated));
 });
 
-router.delete("/orgs/:orgId/members/:memberId", async (req: Request, res: Response): Promise<void> => {
+router.delete("/organizations/:orgId/members/:memberId", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = RemoveMemberParams.safeParse(req.params);

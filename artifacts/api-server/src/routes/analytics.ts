@@ -1,10 +1,14 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, gte, desc } from "drizzle-orm";
-import { db, postMetricsTable, workspacesTable, membershipsTable } from "@workspace/db";
+import { eq, and, count } from "drizzle-orm";
+import { db, projectsTable, aiJobsTable, publishingJobsTable, workspacesTable, membershipsTable } from "@workspace/db";
 import {
   GetWorkspaceAnalyticsParams,
   GetWorkspaceAnalyticsQueryParams,
   GetWorkspaceAnalyticsResponse,
+  GetProjectAnalyticsParams,
+  GetProjectAnalyticsResponse,
+  GetAnalyticsRecommendationsParams,
+  GetAnalyticsRecommendationsResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -46,33 +50,115 @@ router.get("/workspaces/:workspaceId/analytics", async (req: Request, res: Respo
     return;
   }
 
-  const since = query.data.since ? new Date(query.data.since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [projectCount] = await db
+    .select({ count: count() })
+    .from(projectsTable)
+    .where(eq(projectsTable.workspaceId, params.data.workspaceId));
 
-  const metrics = await db
-    .select()
-    .from(postMetricsTable)
+  const [jobCount] = await db
+    .select({ count: count() })
+    .from(aiJobsTable)
     .where(and(
-      eq(postMetricsTable.workspaceId, params.data.workspaceId),
-      gte(postMetricsTable.fetchedAt, since),
-    ))
-    .orderBy(desc(postMetricsTable.fetchedAt))
-    .limit(query.data.limit ?? 100);
+      eq(aiJobsTable.workspaceId, params.data.workspaceId),
+      eq(aiJobsTable.status, "succeeded"),
+    ));
 
-  const totalViews = metrics.reduce((sum, m) => sum + (m.views ?? 0), 0);
-  const totalLikes = metrics.reduce((sum, m) => sum + (m.likes ?? 0), 0);
-  const totalShares = metrics.reduce((sum, m) => sum + (m.shares ?? 0), 0);
-  const totalComments = metrics.reduce((sum, m) => sum + (m.comments ?? 0), 0);
+  const [publishedCount] = await db
+    .select({ count: count() })
+    .from(publishingJobsTable)
+    .where(and(
+      eq(publishingJobsTable.workspaceId, params.data.workspaceId),
+      eq(publishingJobsTable.status, "published"),
+    ));
+
+  const [totalPublished] = await db
+    .select({ count: count() })
+    .from(publishingJobsTable)
+    .where(eq(publishingJobsTable.workspaceId, params.data.workspaceId));
+
+  const successRate = totalPublished?.count
+    ? Math.round(((publishedCount?.count ?? 0) / totalPublished.count) * 100) / 100
+    : 0;
+
+  const periodStart = query.data.startDate ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const periodEnd = query.data.endDate ?? new Date().toISOString();
 
   res.json(GetWorkspaceAnalyticsResponse.parse({
-    totalViews,
-    totalLikes,
-    totalShares,
-    totalComments,
-    metrics,
-    recommendations: [],
-    setupRequired: true,
-    setupMessage: "Connect your social accounts and configure analytics webhooks in Workspace Settings to see real-time metrics.",
+    workspaceId: params.data.workspaceId,
+    period: { startDate: periodStart, endDate: periodEnd },
+    projectsCreated: projectCount?.count ?? 0,
+    assetsGenerated: jobCount?.count ?? 0,
+    publishingSuccessRate: successRate,
+    totalCreditsUsed: 0,
+    topPlatforms: [],
+    postPerformance: [],
   }));
+});
+
+router.get("/projects/:projectId/analytics", async (req: Request, res: Response): Promise<void> => {
+  if (!requireAuth(req, res)) return;
+
+  const params = GetProjectAnalyticsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, params.data.projectId));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  const [ws] = await db.select().from(workspacesTable).where(eq(workspacesTable.id, project.workspaceId));
+  if (!ws) {
+    res.status(404).json({ error: "Workspace not found" });
+    return;
+  }
+
+  const [mem] = await db.select().from(membershipsTable).where(
+    and(eq(membershipsTable.orgId, ws.orgId), eq(membershipsTable.userId, req.user!.id))
+  );
+  if (!mem) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  res.json(GetProjectAnalyticsResponse.parse({
+    projectId: params.data.projectId,
+    views: null,
+    likes: null,
+    comments: null,
+    shares: null,
+    watchTime: null,
+    publishedPosts: [],
+  }));
+});
+
+router.get("/workspaces/:workspaceId/analytics/recommendations", async (req: Request, res: Response): Promise<void> => {
+  if (!requireAuth(req, res)) return;
+
+  const params = GetAnalyticsRecommendationsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [ws] = await db.select().from(workspacesTable).where(eq(workspacesTable.id, params.data.workspaceId));
+  if (!ws) {
+    res.status(404).json({ error: "Workspace not found" });
+    return;
+  }
+
+  const [mem] = await db.select().from(membershipsTable).where(
+    and(eq(membershipsTable.orgId, ws.orgId), eq(membershipsTable.userId, req.user!.id))
+  );
+  if (!mem) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  res.json(GetAnalyticsRecommendationsResponse.parse([]));
 });
 
 export default router;

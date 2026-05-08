@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, desc, and, ilike } from "drizzle-orm";
-import { db, templatesTable, projectsTable, workspacesTable, membershipsTable } from "@workspace/db";
+import { eq, desc, and } from "drizzle-orm";
+import { db, templatesTable } from "@workspace/db";
 import {
   ListTemplatesQueryParams,
   ListTemplatesResponse,
@@ -28,8 +28,11 @@ router.get("/templates", async (req: Request, res: Response): Promise<void> => {
   }
 
   const conditions = [];
-  if (query.data.search) {
-    conditions.push(ilike(templatesTable.name, `%${query.data.search}%`));
+  if (query.data.type) {
+    conditions.push(eq(templatesTable.type, query.data.type));
+  }
+  if (query.data.category) {
+    conditions.push(eq(templatesTable.category, query.data.category));
   }
 
   const templates = await db
@@ -37,7 +40,7 @@ router.get("/templates", async (req: Request, res: Response): Promise<void> => {
     .from(templatesTable)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(desc(templatesTable.createdAt))
-    .limit(query.data.limit ?? 50);
+    .limit(50);
 
   res.json(ListTemplatesResponse.parse(templates));
 });

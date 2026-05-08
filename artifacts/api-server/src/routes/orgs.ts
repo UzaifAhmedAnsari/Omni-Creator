@@ -21,7 +21,7 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-router.get("/orgs", async (req: Request, res: Response): Promise<void> => {
+router.get("/organizations", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const memberships = await db
@@ -34,7 +34,7 @@ router.get("/orgs", async (req: Request, res: Response): Promise<void> => {
   res.json(ListOrganizationsResponse.parse(orgs));
 });
 
-router.post("/orgs", async (req: Request, res: Response): Promise<void> => {
+router.post("/organizations", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const parsed = CreateOrganizationBody.safeParse(req.body);
@@ -43,7 +43,7 @@ router.post("/orgs", async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const slug = parsed.data.name
+  const slug = parsed.data.slug ?? parsed.data.name
     .toLowerCase()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
@@ -64,7 +64,7 @@ router.post("/orgs", async (req: Request, res: Response): Promise<void> => {
   res.status(201).json(GetOrganizationResponse.parse(org));
 });
 
-router.get("/orgs/:orgId", async (req: Request, res: Response): Promise<void> => {
+router.get("/organizations/:orgId", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = GetOrganizationParams.safeParse(req.params);
@@ -95,7 +95,7 @@ router.get("/orgs/:orgId", async (req: Request, res: Response): Promise<void> =>
   res.json(GetOrganizationResponse.parse(org));
 });
 
-router.patch("/orgs/:orgId", async (req: Request, res: Response): Promise<void> => {
+router.patch("/organizations/:orgId", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = UpdateOrganizationParams.safeParse(req.params);

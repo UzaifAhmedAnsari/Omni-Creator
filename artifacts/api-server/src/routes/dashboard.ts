@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, count } from "drizzle-orm";
-import { db, projectsTable, aiJobsTable, activityLogTable, workspacesTable, membershipsTable } from "@workspace/db";
+import { db, projectsTable, aiJobsTable, activityLogTable, publishingJobsTable, workspacesTable, membershipsTable } from "@workspace/db";
 import {
   GetDashboardParams,
   GetDashboardResponse,
@@ -42,10 +42,15 @@ router.get("/workspaces/:workspaceId/dashboard", async (req: Request, res: Respo
     return;
   }
 
-  const [projectCount] = await db
-    .select({ count: count() })
+  const allProjects = await db
+    .select({ status: projectsTable.status })
     .from(projectsTable)
     .where(eq(projectsTable.workspaceId, params.data.workspaceId));
+
+  const projectCounts: Record<string, number> = {};
+  for (const p of allProjects) {
+    projectCounts[p.status] = (projectCounts[p.status] ?? 0) + 1;
+  }
 
   const [activeJobCount] = await db
     .select({ count: count() })
@@ -53,6 +58,14 @@ router.get("/workspaces/:workspaceId/dashboard", async (req: Request, res: Respo
     .where(and(
       eq(aiJobsTable.workspaceId, params.data.workspaceId),
       eq(aiJobsTable.status, "running"),
+    ));
+
+  const [scheduledCount] = await db
+    .select({ count: count() })
+    .from(publishingJobsTable)
+    .where(and(
+      eq(publishingJobsTable.workspaceId, params.data.workspaceId),
+      eq(publishingJobsTable.status, "scheduled"),
     ));
 
   const recentProjects = await db
@@ -63,17 +76,18 @@ router.get("/workspaces/:workspaceId/dashboard", async (req: Request, res: Respo
     .limit(5);
 
   res.json(GetDashboardResponse.parse({
-    stats: {
-      totalProjects: projectCount?.count ?? 0,
-      activeAiJobs: activeJobCount?.count ?? 0,
-      publishedThisMonth: 0,
-      storageUsedBytes: 0,
-    },
+    workspaceId: params.data.workspaceId,
+    projectCounts,
     recentProjects,
+    creditsUsed: 0,
+    creditsBalance: 0,
+    scheduledPosts: scheduledCount?.count ?? 0,
+    providerStatus: {},
+    activeJobs: activeJobCount?.count ?? 0,
   }));
 });
 
-router.get("/workspaces/:workspaceId/activity", async (req: Request, res: Response): Promise<void> => {
+router.get("/workspaces/:workspaceId/recent-activity", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = GetRecentActivityParams.safeParse(req.params);
@@ -94,10 +108,10 @@ router.get("/workspaces/:workspaceId/activity", async (req: Request, res: Respon
     return;
   }
 
-  const [m] = await db.select().from(membershipsTable).where(
+  const [mem] = await db.select().from(membershipsTable).where(
     and(eq(membershipsTable.orgId, ws.orgId), eq(membershipsTable.userId, req.user!.id))
   );
-  if (!m) {
+  if (!mem) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }

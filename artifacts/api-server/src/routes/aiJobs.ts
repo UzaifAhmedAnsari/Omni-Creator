@@ -1,8 +1,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, aiJobsTable, projectsTable, workspacesTable, membershipsTable, providerConfigsTable } from "@workspace/db";
+import { db, aiJobsTable, projectsTable, workspacesTable, membershipsTable, providerConfigsTable, projectPlansTable } from "@workspace/db";
 import {
   ListAiJobsParams,
+  ListAiJobsQueryParams,
   ListAiJobsResponse,
   CreateAiJobParams,
   CreateAiJobBody,
@@ -12,6 +13,7 @@ import {
   RetryAiJobParams,
   GenerateProjectPlanParams,
   GenerateProjectPlanBody,
+  GenerateProjectPlanResponse,
   GetProjectPlanParams,
   GetProjectPlanResponse,
   SaveProjectPlanParams,
@@ -29,18 +31,23 @@ function requireAuth(req: Request, res: Response): boolean {
   return true;
 }
 
-async function getProjectAccess(projectId: string, userId: string) {
-  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
-  if (!project) return null;
-  const [ws] = await db.select().from(workspacesTable).where(eq(workspacesTable.id, project.workspaceId));
+async function getWorkspaceAccess(workspaceId: string, userId: string) {
+  const [ws] = await db.select().from(workspacesTable).where(eq(workspacesTable.id, workspaceId));
   if (!ws) return null;
   const [m] = await db.select().from(membershipsTable).where(
     and(eq(membershipsTable.orgId, ws.orgId), eq(membershipsTable.userId, userId))
   );
-  return m ? { project, ws, member: m } : null;
+  return m ? { ws, member: m } : null;
 }
 
-router.get("/projects/:projectId/ai-jobs", async (req: Request, res: Response): Promise<void> => {
+async function getProjectAccess(projectId: string, userId: string) {
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
+  if (!project) return null;
+  const access = await getWorkspaceAccess(project.workspaceId, userId);
+  return access ? { project, ...access } : null;
+}
+
+router.get("/workspaces/:workspaceId/ai-jobs", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = ListAiJobsParams.safeParse(req.params);
@@ -49,22 +56,33 @@ router.get("/projects/:projectId/ai-jobs", async (req: Request, res: Response): 
     return;
   }
 
-  const access = await getProjectAccess(params.data.projectId, req.user!.id);
+  const query = ListAiJobsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+
+  const access = await getWorkspaceAccess(params.data.workspaceId, req.user!.id);
   if (!access) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
 
+  const conditions = [eq(aiJobsTable.workspaceId, params.data.workspaceId)];
+  if (query.data.projectId) {
+    conditions.push(eq(aiJobsTable.projectId, query.data.projectId));
+  }
+
   const jobs = await db
     .select()
     .from(aiJobsTable)
-    .where(eq(aiJobsTable.projectId, params.data.projectId))
+    .where(and(...conditions))
     .orderBy(desc(aiJobsTable.createdAt));
 
   res.json(ListAiJobsResponse.parse(jobs));
 });
 
-router.post("/projects/:projectId/ai-jobs", async (req: Request, res: Response): Promise<void> => {
+router.post("/workspaces/:workspaceId/ai-jobs", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = CreateAiJobParams.safeParse(req.params);
@@ -73,7 +91,7 @@ router.post("/projects/:projectId/ai-jobs", async (req: Request, res: Response):
     return;
   }
 
-  const access = await getProjectAccess(params.data.projectId, req.user!.id);
+  const access = await getWorkspaceAccess(params.data.workspaceId, req.user!.id);
   if (!access || access.member.role === "viewer") {
     res.status(403).json({ error: "Forbidden" });
     return;
@@ -85,25 +103,27 @@ router.post("/projects/:projectId/ai-jobs", async (req: Request, res: Response):
     return;
   }
 
+  const providerKey = parsed.data.providerKey ?? "openai";
+
   const [providerConfig] = await db
     .select()
     .from(providerConfigsTable)
     .where(and(
       eq(providerConfigsTable.orgId, access.ws.orgId),
-      eq(providerConfigsTable.providerKey, parsed.data.provider),
+      eq(providerConfigsTable.providerKey, providerKey),
     ));
 
   if (!providerConfig?.configured) {
     const [job] = await db.insert(aiJobsTable).values({
-      projectId: params.data.projectId,
-      workspaceId: access.ws.id,
-      taskType: parsed.data.type,
-      providerKey: parsed.data.provider,
+      workspaceId: params.data.workspaceId,
+      projectId: parsed.data.projectId ?? null,
+      taskType: parsed.data.taskType,
+      providerKey,
       prompt: parsed.data.prompt ?? null,
-      parameters: (parsed.data.params ?? {}) as Record<string, unknown>,
+      parameters: (parsed.data.parameters ?? {}) as Record<string, unknown>,
       status: "setup_required",
-      errorMessage: `Provider '${parsed.data.provider}' is not configured. Add your API key in Settings > AI Providers.`,
-      setupRequiredInfo: { provider: parsed.data.provider } as Record<string, unknown>,
+      errorMessage: `Provider '${providerKey}' is not configured. Add your API key in Settings > AI Providers.`,
+      setupRequiredInfo: { provider: providerKey } as Record<string, unknown>,
       createdById: req.user!.id,
     }).returning();
     res.status(202).json(GetAiJobResponse.parse(job));
@@ -111,12 +131,12 @@ router.post("/projects/:projectId/ai-jobs", async (req: Request, res: Response):
   }
 
   const [job] = await db.insert(aiJobsTable).values({
-    projectId: params.data.projectId,
-    workspaceId: access.ws.id,
-    taskType: parsed.data.type,
-    providerKey: parsed.data.provider,
+    workspaceId: params.data.workspaceId,
+    projectId: parsed.data.projectId ?? null,
+    taskType: parsed.data.taskType,
+    providerKey,
     prompt: parsed.data.prompt ?? null,
-    parameters: (parsed.data.params ?? {}) as Record<string, unknown>,
+    parameters: (parsed.data.parameters ?? {}) as Record<string, unknown>,
     status: "queued",
     createdById: req.user!.id,
   }).returning();
@@ -221,13 +241,15 @@ router.post("/projects/:projectId/ai-plan", async (req: Request, res: Response):
     return;
   }
 
-  res.json({
-    plan: {
-      setupRequired: true,
-      message: "AI plan generation requires an AI provider to be configured in your workspace settings.",
-      prompt: parsed.data.prompt,
-    },
-  });
+  res.json(GenerateProjectPlanResponse.parse({
+    projectId: params.data.projectId,
+    hooks: [],
+    script: null,
+    scenes: [],
+    creditEstimate: 0,
+    safetyWarnings: ["AI provider not configured — add an API key in Settings > AI Providers to generate plans."],
+    updatedAt: new Date().toISOString(),
+  }));
 });
 
 router.get("/projects/:projectId/ai-plan", async (req: Request, res: Response): Promise<void> => {
@@ -245,7 +267,25 @@ router.get("/projects/:projectId/ai-plan", async (req: Request, res: Response): 
     return;
   }
 
-  res.json(GetProjectPlanResponse.parse({ plan: null }));
+  const [plan] = await db
+    .select()
+    .from(projectPlansTable)
+    .where(eq(projectPlansTable.projectId, params.data.projectId));
+
+  if (!plan) {
+    res.status(404).json({ error: "No plan found for this project" });
+    return;
+  }
+
+  res.json(GetProjectPlanResponse.parse({
+    projectId: plan.projectId,
+    hooks: plan.hooks ?? [],
+    script: plan.script ?? null,
+    scenes: plan.scenes ?? [],
+    layoutPlan: null,
+    creditEstimate: 0,
+    updatedAt: plan.updatedAt?.toISOString() ?? new Date().toISOString(),
+  }));
 });
 
 router.put("/projects/:projectId/ai-plan", async (req: Request, res: Response): Promise<void> => {
@@ -269,7 +309,32 @@ router.put("/projects/:projectId/ai-plan", async (req: Request, res: Response): 
     return;
   }
 
-  res.json(SaveProjectPlanResponse.parse({ plan: parsed.data.plan }));
+  await db
+    .insert(projectPlansTable)
+    .values({
+      projectId: params.data.projectId,
+      hooks: parsed.data.hooks as unknown[],
+      script: (parsed.data.script ?? null) as Record<string, unknown> | null,
+      scenes: parsed.data.scenes as unknown[],
+    })
+    .onConflictDoUpdate({
+      target: projectPlansTable.projectId,
+      set: {
+        hooks: parsed.data.hooks as unknown[],
+        script: (parsed.data.script ?? null) as Record<string, unknown> | null,
+        scenes: parsed.data.scenes as unknown[],
+        updatedAt: new Date(),
+      },
+    });
+
+  res.json(SaveProjectPlanResponse.parse({
+    projectId: params.data.projectId,
+    hooks: parsed.data.hooks,
+    script: parsed.data.script ?? null,
+    scenes: parsed.data.scenes,
+    creditEstimate: parsed.data.creditEstimate,
+    updatedAt: parsed.data.updatedAt,
+  }));
 });
 
 export default router;

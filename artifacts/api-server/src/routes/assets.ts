@@ -165,21 +165,22 @@ router.post("/assets/upload-url", async (req: Request, res: Response): Promise<v
     parsed.data.mimeType.startsWith("image/") ? "image" :
     parsed.data.mimeType.startsWith("audio/") ? "audio" : "document";
 
+  const key = `${parsed.data.workspaceId}/${crypto.randomUUID()}/${parsed.data.fileName}`;
+
   const [asset] = await db.insert(assetsTable).values({
     workspaceId: parsed.data.workspaceId,
-    name: parsed.data.filename,
+    name: parsed.data.fileName,
     type: assetType as "image" | "video" | "audio" | "document" | "other",
     mimeType: parsed.data.mimeType,
-    url: `/uploads/${parsed.data.workspaceId}/${crypto.randomUUID()}/${parsed.data.filename}`,
+    url: `/uploads/${key}`,
     source: "uploaded",
     createdById: req.user!.id,
   }).returning();
 
   res.json(GetUploadUrlResponse.parse({
-    uploadUrl: null,
+    uploadUrl: `/api/assets/upload/${key}`,
     assetId: asset.id,
-    setupRequired: true,
-    setupMessage: "Object storage is not configured. Connect an S3-compatible storage provider to enable direct uploads.",
+    key,
   }));
 });
 

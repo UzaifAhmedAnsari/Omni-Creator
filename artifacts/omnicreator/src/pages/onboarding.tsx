@@ -21,20 +21,20 @@ export default function OnboardingPage() {
   const [error, setError] = useState("");
 
   const createOrg = useMutation({
-    mutationFn: () => post<OrgResponse>("/api/orgs", { name: orgName }),
+    mutationFn: () => post<OrgResponse>("/api/organizations", { name: orgName }),
     onSuccess: (data) => {
       setOrgId(data.id);
       setWorkspaceName(`${orgName}'s Workspace`);
-      qc.invalidateQueries({ queryKey: ["/api/orgs"] });
+      qc.invalidateQueries({ queryKey: ["/api/organizations"] });
       setStep("workspace");
     },
     onError: (e: Error) => setError(e.message),
   });
 
   const createWorkspace = useMutation({
-    mutationFn: () => post<WorkspaceResponse>(`/api/orgs/${orgId}/workspaces`, { name: workspaceName }),
+    mutationFn: () => post<WorkspaceResponse>(`/api/organizations/${orgId}/workspaces`, { name: workspaceName }),
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: [`/api/orgs/${orgId}/workspaces`] });
+      qc.invalidateQueries({ queryKey: [`/api/organizations/${orgId}/workspaces`] });
       navigate(`/w/${data.id}`);
     },
     onError: (e: Error) => setError(e.message),

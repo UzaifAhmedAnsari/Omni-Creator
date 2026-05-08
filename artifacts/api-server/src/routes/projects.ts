@@ -55,6 +55,8 @@ async function getProjectAccess(projectId: string, userId: string) {
   return access ? { project, ...access } : null;
 }
 
+type ProjectStatus = "draft" | "in_progress" | "review" | "approved" | "published" | "archived";
+
 router.get("/workspaces/:workspaceId/projects", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
@@ -158,9 +160,15 @@ router.patch("/projects/:projectId", async (req: Request, res: Response): Promis
     return;
   }
 
+  const { status, ...restData } = parsed.data;
+
   const [updated] = await db
     .update(projectsTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set({
+      ...restData,
+      ...(status ? { status: status as ProjectStatus } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(projectsTable.id, params.data.projectId))
     .returning();
 
@@ -281,8 +289,21 @@ router.get("/projects/:projectId/timeline", async (req: Request, res: Response):
     eq(timelinesTable.projectId, params.data.projectId)
   );
 
+  if (!timeline) {
+    res.status(404).json({ error: "No timeline found for this project" });
+    return;
+  }
+
   res.json(GetTimelineResponse.parse({
-    data: timeline ? { tracks: timeline.tracks, captions: timeline.captions, durationMs: timeline.durationMs, audioMix: timeline.audioMix, exportSettings: timeline.exportSettings } : null
+    id: timeline.id,
+    projectId: timeline.projectId,
+    version: timeline.version,
+    durationMs: timeline.durationMs,
+    tracks: timeline.tracks,
+    captions: timeline.captions,
+    audioMix: timeline.audioMix,
+    exportSettings: timeline.exportSettings,
+    updatedAt: timeline.updatedAt.toISOString(),
   }));
 });
 
@@ -307,31 +328,41 @@ router.put("/projects/:projectId/timeline", async (req: Request, res: Response):
     return;
   }
 
-  const data = parsed.data.data as Record<string, unknown>;
-
-  await db
+  const [saved] = await db
     .insert(timelinesTable)
     .values({
       projectId: params.data.projectId,
-      tracks: (data?.tracks ?? []) as unknown[],
-      captions: (data?.captions ?? []) as unknown[],
-      durationMs: (data?.durationMs as number) ?? 0,
-      audioMix: (data?.audioMix ?? {}) as Record<string, unknown>,
-      exportSettings: (data?.exportSettings ?? {}) as Record<string, unknown>,
+      durationMs: parsed.data.durationMs,
+      tracks: parsed.data.tracks as unknown[],
+      captions: (parsed.data.captions ?? []) as unknown[],
+      audioMix: (parsed.data.audioMix ?? {}) as Record<string, unknown>,
+      exportSettings: (parsed.data.exportSettings ?? {}) as Record<string, unknown>,
     })
     .onConflictDoUpdate({
       target: timelinesTable.projectId,
       set: {
-        tracks: (data?.tracks ?? []) as unknown[],
-        captions: (data?.captions ?? []) as unknown[],
-        durationMs: (data?.durationMs as number) ?? 0,
-        audioMix: (data?.audioMix ?? {}) as Record<string, unknown>,
-        exportSettings: (data?.exportSettings ?? {}) as Record<string, unknown>,
+        durationMs: parsed.data.durationMs,
+        tracks: parsed.data.tracks as unknown[],
+        captions: (parsed.data.captions ?? []) as unknown[],
+        audioMix: (parsed.data.audioMix ?? {}) as Record<string, unknown>,
+        exportSettings: (parsed.data.exportSettings ?? {}) as Record<string, unknown>,
+        version: timelinesTable.version,
         updatedAt: new Date(),
       },
-    });
+    })
+    .returning();
 
-  res.json(SaveTimelineResponse.parse({ success: true }));
+  res.json(SaveTimelineResponse.parse({
+    id: saved.id,
+    projectId: saved.projectId,
+    version: saved.version,
+    durationMs: saved.durationMs,
+    tracks: saved.tracks,
+    captions: saved.captions,
+    audioMix: saved.audioMix,
+    exportSettings: saved.exportSettings,
+    updatedAt: saved.updatedAt.toISOString(),
+  }));
 });
 
 router.get("/projects/:projectId/canvas", async (req: Request, res: Response): Promise<void> => {
@@ -353,8 +384,19 @@ router.get("/projects/:projectId/canvas", async (req: Request, res: Response): P
     eq(canvasesTable.projectId, params.data.projectId)
   );
 
+  if (!canvas) {
+    res.status(404).json({ error: "No canvas found for this project" });
+    return;
+  }
+
   res.json(GetCanvasResponse.parse({
-    data: canvas ? { pages: canvas.pages, sharedAssets: canvas.sharedAssets } : null
+    id: canvas.id,
+    projectId: canvas.projectId,
+    version: canvas.version,
+    pages: canvas.pages,
+    sharedAssets: canvas.sharedAssets,
+    brandKitId: canvas.brandKitId ?? null,
+    updatedAt: canvas.updatedAt.toISOString(),
   }));
 });
 
@@ -379,25 +421,35 @@ router.put("/projects/:projectId/canvas", async (req: Request, res: Response): P
     return;
   }
 
-  const data = parsed.data.data as Record<string, unknown>;
-
-  await db
+  const [saved] = await db
     .insert(canvasesTable)
     .values({
       projectId: params.data.projectId,
-      pages: (data?.pages ?? []) as unknown[],
-      sharedAssets: (data?.sharedAssets ?? []) as string[],
+      pages: parsed.data.pages as unknown[],
+      sharedAssets: (parsed.data.sharedAssets ?? []) as string[],
+      brandKitId: parsed.data.brandKitId ?? null,
     })
     .onConflictDoUpdate({
       target: canvasesTable.projectId,
       set: {
-        pages: (data?.pages ?? []) as unknown[],
-        sharedAssets: (data?.sharedAssets ?? []) as string[],
+        pages: parsed.data.pages as unknown[],
+        sharedAssets: (parsed.data.sharedAssets ?? []) as string[],
+        brandKitId: parsed.data.brandKitId ?? null,
+        version: canvasesTable.version,
         updatedAt: new Date(),
       },
-    });
+    })
+    .returning();
 
-  res.json(SaveCanvasResponse.parse({ success: true }));
+  res.json(SaveCanvasResponse.parse({
+    id: saved.id,
+    projectId: saved.projectId,
+    version: saved.version,
+    pages: saved.pages,
+    sharedAssets: saved.sharedAssets,
+    brandKitId: saved.brandKitId ?? null,
+    updatedAt: saved.updatedAt.toISOString(),
+  }));
 });
 
 export default router;

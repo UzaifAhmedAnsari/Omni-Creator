@@ -32,7 +32,7 @@ async function checkOrgAccess(orgId: string, userId: string, roles?: string[]) {
   return m;
 }
 
-router.get("/orgs/:orgId/workspaces", async (req: Request, res: Response): Promise<void> => {
+router.get("/organizations/:orgId/workspaces", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = ListWorkspacesParams.safeParse(req.params);
@@ -54,7 +54,7 @@ router.get("/orgs/:orgId/workspaces", async (req: Request, res: Response): Promi
   res.json(ListWorkspacesResponse.parse(workspaces));
 });
 
-router.post("/orgs/:orgId/workspaces", async (req: Request, res: Response): Promise<void> => {
+router.post("/organizations/:orgId/workspaces", async (req: Request, res: Response): Promise<void> => {
   if (!requireAuth(req, res)) return;
 
   const params = CreateWorkspaceParams.safeParse(req.params);

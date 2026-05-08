@@ -61,29 +61,29 @@ export default function SettingsPage() {
   const { data: brandKits, isLoading: brandKitsLoading } = useListBrandKits(workspaceId);
 
   const updateOrgMutation = useMutation({
-    mutationFn: () => patch(`/api/orgs/${orgId}`, { name: newOrgName }),
+    mutationFn: () => patch(`/api/organizations/${orgId}`, { name: newOrgName }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [orgId ?? ""] }),
   });
 
   const saveProviderMutation = useMutation({
     mutationFn: ({ provider, apiKey }: { provider: string; apiKey: string }) =>
-      put(`/api/orgs/${orgId}/providers/${provider}`, { apiKey, isActive: true }),
+      post(`/api/organizations/${orgId}/providers`, { providerKey: provider, apiKey, isDefault: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [orgId ?? ""] }),
   });
 
   const toggleProviderMutation = useMutation({
     mutationFn: ({ provider, isActive }: { provider: string; isActive: boolean }) =>
-      put(`/api/orgs/${orgId}/providers/${provider}`, { isActive }),
+      post(`/api/organizations/${orgId}/providers`, { providerKey: provider, isDefault: isActive }),
     onSuccess: () => qc.invalidateQueries({ queryKey: [orgId ?? ""] }),
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: (memberId: string) => del(`/api/orgs/${orgId}/members/${memberId}`),
+    mutationFn: (memberId: string) => del(`/api/organizations/${orgId}/members/${memberId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: [orgId ?? ""] }),
   });
 
   const inviteMutation = useMutation({
-    mutationFn: () => post(`/api/orgs/${orgId}/members`, { email: inviteEmail, role: inviteRole }),
+    mutationFn: () => post(`/api/organizations/${orgId}/members`, { email: inviteEmail, role: inviteRole }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId ?? ""] });
       setInviteEmail("");
