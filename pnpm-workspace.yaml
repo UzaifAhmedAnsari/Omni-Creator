@@ -1,8 +1,9 @@
 packages:
-  - artifacts/*
-  - lib/*
-  - lib/integrations/*
-  - scripts
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: false
 
 autoInstallPeers: false
 
@@ -124,3 +125,5 @@ overrides:
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
+
+

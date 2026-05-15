@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: omnicreator-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-omnicreator}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+      POSTGRES_DB: ${DB_NAME:-omnicreator}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-omnicreator}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnicreator-network
+
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: omnicreator-api
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${DB_USER:-omnicreator}:${DB_PASSWORD:-password123}@postgres:5432/${DB_NAME:-omnicreator}
+      SESSION_SECRET: ${SESSION_SECRET:-dev-secret-key-change-in-production}
+      REPLIT_AUTH_CLIENT_ID: ${REPLIT_AUTH_CLIENT_ID:-}
+      REPLIT_AUTH_CLIENT_SECRET: ${REPLIT_AUTH_CLIENT_SECRET:-}
+    ports:
+      - "${API_PORT:-5000}:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+    command: pnpm --filter @workspace/api-server run dev
+    networks:
+      - omnicreator-network
+
+  # Web Frontend
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: omnicreator-web
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      - api
+    networks:
+      - omnicreator-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  omnicreator-network:
+    driver: bridge

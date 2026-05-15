@@ -1,0 +1,35 @@
+# Build stage
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+# Copy workspace files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+
+# Copy apps and packages
+COPY apps ./apps
+COPY packages ./packages
+
+# Install pnpm and dependencies
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+# Build web app
+RUN pnpm --filter @workspace/omnicreator run build
+
+# Production stage - using nginx
+FROM nginx:alpine
+
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy built app from builder stage
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+
+# Create a script to inject env vars and start nginx
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+EXPOSE 3000
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

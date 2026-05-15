@@ -1,0 +1,44 @@
+# Build stage
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+# Copy workspace files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+
+# Copy apps and packages
+COPY apps ./apps
+COPY packages ./packages
+
+# Install pnpm and dependencies
+RUN npm install -g pnpm && pnpm install --frozen-lockfile
+
+# Build API server
+RUN pnpm --filter @workspace/api-server run build
+
+# Production stage
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Install pnpm in production image
+RUN npm install -g pnpm
+
+# Copy workspace files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy apps and packages
+COPY apps ./apps
+COPY packages ./packages
+
+# Install only production dependencies
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy built API from builder stage
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+
+EXPOSE 5000
+
+ENV NODE_ENV=production
+
+CMD ["node", "--enable-source-maps", "apps/api/dist/index.mjs"]

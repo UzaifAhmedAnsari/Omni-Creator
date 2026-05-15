@@ -1,0 +1,2785 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: OmniCreator AI Studio API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: Auth
+    description: Authentication endpoints
+  - name: Organizations
+    description: Organization management
+  - name: Workspaces
+    description: Workspace management
+  - name: Members
+    description: Membership and roles
+  - name: Projects
+    description: Project management
+  - name: Assets
+    description: Asset library
+  - name: BrandKits
+    description: Brand kit management
+  - name: Templates
+    description: Template library
+  - name: AIJobs
+    description: AI generation jobs
+  - name: VideoEditor
+    description: Video editor state
+  - name: ImageEditor
+    description: Image editor state
+  - name: Publishing
+    description: Social publishing
+  - name: SocialAccounts
+    description: Connected social accounts
+  - name: Analytics
+    description: Analytics and recommendations
+  - name: Billing
+    description: Billing and usage
+  - name: Providers
+    description: AI provider configuration
+  - name: Admin
+    description: Admin operations
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: loginWithEmailPassword
+      summary: Sign in with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailPasswordLoginBody'
+      responses:
+        '200':
+          description: Signed in successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+        '400':
+          description: Validation or missing request data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Account exists only with Replit login.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: User already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signUpWithEmailPassword
+      summary: Create a new account with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailPasswordSignUpBody'
+      responses:
+        '201':
+          description: Account created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+        '400':
+          description: Validation or missing request data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: User already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect on login completion.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  # ORGANIZATIONS
+  /organizations:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      summary: List user's organizations
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      summary: Create a new organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationBody'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+
+  /organizations/{orgId}:
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      summary: Get organization details
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      summary: Update organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationBody'
+      responses:
+        '200':
+          description: Updated organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+
+  # WORKSPACES
+  /organizations/{orgId}/workspaces:
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaces
+      summary: List workspaces in an organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workspace'
+    post:
+      tags: [Workspaces]
+      operationId: createWorkspace
+      summary: Create a workspace
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkspaceBody'
+      responses:
+        '201':
+          description: Created workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+
+  /workspaces/{workspaceId}:
+    get:
+      tags: [Workspaces]
+      operationId: getWorkspace
+      summary: Get workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workspace details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+    patch:
+      tags: [Workspaces]
+      operationId: updateWorkspace
+      summary: Update workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkspaceBody'
+      responses:
+        '200':
+          description: Updated workspace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workspace'
+
+  # MEMBERS
+  /organizations/{orgId}/members:
+    get:
+      tags: [Members]
+      operationId: listOrgMembers
+      summary: List organization members
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Member'
+    post:
+      tags: [Members]
+      operationId: inviteMember
+      summary: Invite a member to organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteMemberBody'
+      responses:
+        '201':
+          description: Invited member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+
+  /organizations/{orgId}/members/{memberId}:
+    patch:
+      tags: [Members]
+      operationId: updateMemberRole
+      summary: Update member role
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRoleBody'
+      responses:
+        '200':
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+    delete:
+      tags: [Members]
+      operationId: removeMember
+      summary: Remove member from organization
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # BRAND KITS
+  /workspaces/{workspaceId}/brand-kits:
+    get:
+      tags: [BrandKits]
+      operationId: listBrandKits
+      summary: List brand kits in a workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of brand kits
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BrandKit'
+    post:
+      tags: [BrandKits]
+      operationId: createBrandKit
+      summary: Create a brand kit
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBrandKitBody'
+      responses:
+        '201':
+          description: Created brand kit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandKit'
+
+  /brand-kits/{brandKitId}:
+    get:
+      tags: [BrandKits]
+      operationId: getBrandKit
+      summary: Get brand kit
+      parameters:
+        - name: brandKitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Brand kit details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandKit'
+    patch:
+      tags: [BrandKits]
+      operationId: updateBrandKit
+      summary: Update brand kit
+      parameters:
+        - name: brandKitId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBrandKitBody'
+      responses:
+        '200':
+          description: Updated brand kit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandKit'
+    delete:
+      tags: [BrandKits]
+      operationId: deleteBrandKit
+      summary: Delete brand kit
+      parameters:
+        - name: brandKitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # PROJECTS
+  /workspaces/{workspaceId}/projects:
+    get:
+      tags: [Projects]
+      operationId: listProjects
+      summary: List projects in a workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: archived
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+    post:
+      tags: [Projects]
+      operationId: createProject
+      summary: Create a new project
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectBody'
+      responses:
+        '201':
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /projects/{projectId}:
+    get:
+      tags: [Projects]
+      operationId: getProject
+      summary: Get project details
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+    patch:
+      tags: [Projects]
+      operationId: updateProject
+      summary: Update project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectBody'
+      responses:
+        '200':
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+    delete:
+      tags: [Projects]
+      operationId: deleteProject
+      summary: Delete project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /projects/{projectId}/duplicate:
+    post:
+      tags: [Projects]
+      operationId: duplicateProject
+      summary: Duplicate a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Duplicated project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /projects/{projectId}/archive:
+    post:
+      tags: [Projects]
+      operationId: archiveProject
+      summary: Archive a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  /projects/{projectId}/restore:
+    post:
+      tags: [Projects]
+      operationId: restoreProject
+      summary: Restore an archived project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+
+  # VIDEO EDITOR
+  /projects/{projectId}/timeline:
+    get:
+      tags: [VideoEditor]
+      operationId: getTimeline
+      summary: Get video editor timeline state
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineDocument'
+    put:
+      tags: [VideoEditor]
+      operationId: saveTimeline
+      summary: Save video editor timeline state
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveTimelineBody'
+      responses:
+        '200':
+          description: Saved timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineDocument'
+
+  # IMAGE EDITOR
+  /projects/{projectId}/canvas:
+    get:
+      tags: [ImageEditor]
+      operationId: getCanvas
+      summary: Get image editor canvas state
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Canvas document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasDocument'
+    put:
+      tags: [ImageEditor]
+      operationId: saveCanvas
+      summary: Save image editor canvas state
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveCanvasBody'
+      responses:
+        '200':
+          description: Saved canvas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasDocument'
+
+  # ASSETS
+  /workspaces/{workspaceId}/assets:
+    get:
+      tags: [Assets]
+      operationId: listAssets
+      summary: List assets in workspace
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: folder
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: tags
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Asset'
+
+  /assets/{assetId}:
+    get:
+      tags: [Assets]
+      operationId: getAsset
+      summary: Get asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+    patch:
+      tags: [Assets]
+      operationId: updateAsset
+      summary: Update asset metadata
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAssetBody'
+      responses:
+        '200':
+          description: Updated asset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+    delete:
+      tags: [Assets]
+      operationId: deleteAsset
+      summary: Delete asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /assets/upload-url:
+    post:
+      tags: [Assets]
+      operationId: getUploadUrl
+      summary: Get a signed upload URL for an asset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetUploadUrlBody'
+      responses:
+        '200':
+          description: Upload URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadUrlResponse'
+
+  # AI JOBS
+  /workspaces/{workspaceId}/ai-jobs:
+    get:
+      tags: [AIJobs]
+      operationId: listAiJobs
+      summary: List AI generation jobs
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of AI jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiJob'
+    post:
+      tags: [AIJobs]
+      operationId: createAiJob
+      summary: Create an AI generation job
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAiJobBody'
+      responses:
+        '201':
+          description: Created AI job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+
+  /ai-jobs/{jobId}:
+    get:
+      tags: [AIJobs]
+      operationId: getAiJob
+      summary: Get AI job status
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: AI job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+
+  /ai-jobs/{jobId}/cancel:
+    post:
+      tags: [AIJobs]
+      operationId: cancelAiJob
+      summary: Cancel an AI job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+
+  /ai-jobs/{jobId}/retry:
+    post:
+      tags: [AIJobs]
+      operationId: retryAiJob
+      summary: Retry a failed AI job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Retried job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJob'
+
+  /projects/{projectId}/generate-plan:
+    post:
+      tags: [AIJobs]
+      operationId: generateProjectPlan
+      summary: Generate AI plan for a project brief
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeneratePlanBody'
+      responses:
+        '200':
+          description: Generated plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPlan'
+
+  /projects/{projectId}/plan:
+    get:
+      tags: [AIJobs]
+      operationId: getProjectPlan
+      summary: Get saved project plan
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPlan'
+    put:
+      tags: [AIJobs]
+      operationId: saveProjectPlan
+      summary: Save/update project plan
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPlan'
+      responses:
+        '200':
+          description: Saved plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPlan'
+
+  # TEMPLATES
+  /workspaces/{workspaceId}/templates:
+    get:
+      tags: [Templates]
+      operationId: listTemplates
+      summary: List templates
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+
+  /templates/{templateId}:
+    get:
+      tags: [Templates]
+      operationId: getTemplate
+      summary: Get template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+
+  # SOCIAL ACCOUNTS
+  /workspaces/{workspaceId}/social-accounts:
+    get:
+      tags: [SocialAccounts]
+      operationId: listSocialAccounts
+      summary: List connected social accounts
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Social accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SocialAccount'
+
+  /social-accounts/{accountId}:
+    delete:
+      tags: [SocialAccounts]
+      operationId: disconnectSocialAccount
+      summary: Disconnect a social account
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # PUBLISHING
+  /workspaces/{workspaceId}/publishing-jobs:
+    get:
+      tags: [Publishing]
+      operationId: listPublishingJobs
+      summary: List publishing jobs
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Publishing jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublishingJob'
+    post:
+      tags: [Publishing]
+      operationId: createPublishingJob
+      summary: Create/schedule a publishing job
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePublishingJobBody'
+      responses:
+        '201':
+          description: Publishing job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishingJob'
+
+  /publishing-jobs/{jobId}:
+    get:
+      tags: [Publishing]
+      operationId: getPublishingJob
+      summary: Get publishing job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Publishing job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishingJob'
+
+  /publishing-jobs/{jobId}/cancel:
+    post:
+      tags: [Publishing]
+      operationId: cancelPublishingJob
+      summary: Cancel a publishing job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublishingJob'
+
+  # ANALYTICS
+  /workspaces/{workspaceId}/analytics:
+    get:
+      tags: [Analytics]
+      operationId: getWorkspaceAnalytics
+      summary: Get workspace-level analytics
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: platform
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkspaceAnalytics'
+
+  /projects/{projectId}/analytics:
+    get:
+      tags: [Analytics]
+      operationId: getProjectAnalytics
+      summary: Get project analytics
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Project analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectAnalytics'
+
+  /workspaces/{workspaceId}/analytics/recommendations:
+    get:
+      tags: [Analytics]
+      operationId: getAnalyticsRecommendations
+      summary: Get AI content recommendations
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalyticsRecommendation'
+
+  # BILLING
+  /organizations/{orgId}/billing:
+    get:
+      tags: [Billing]
+      operationId: getBillingInfo
+      summary: Get billing information
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Billing info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingInfo'
+
+  /organizations/{orgId}/billing/usage:
+    get:
+      tags: [Billing]
+      operationId: getUsageLedger
+      summary: Get usage ledger
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Usage ledger
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageLedger'
+
+  /organizations/{orgId}/billing/checkout:
+    post:
+      tags: [Billing]
+      operationId: createCheckoutSession
+      summary: Create a Stripe checkout session
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCheckoutBody'
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+
+  /billing/plans:
+    get:
+      tags: [Billing]
+      operationId: listPlans
+      summary: List available billing plans
+      responses:
+        '200':
+          description: Plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Plan'
+
+  /webhooks/stripe:
+    post:
+      tags: [Billing]
+      operationId: stripeWebhook
+      summary: Stripe webhook endpoint
+      responses:
+        '200':
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # AI PROVIDERS
+  /organizations/{orgId}/providers:
+    get:
+      tags: [Providers]
+      operationId: listProviders
+      summary: List AI provider configurations
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderConfig'
+    post:
+      tags: [Providers]
+      operationId: saveProviderConfig
+      summary: Save AI provider configuration
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveProviderConfigBody'
+      responses:
+        '200':
+          description: Saved provider config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderConfig'
+
+  /organizations/{orgId}/providers/{providerKey}/health:
+    get:
+      tags: [Providers]
+      operationId: checkProviderHealth
+      summary: Check AI provider health
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: providerKey
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderHealth'
+
+  # DASHBOARD / WOW ENDPOINTS
+  /workspaces/{workspaceId}/dashboard:
+    get:
+      tags: [Workspaces]
+      operationId: getDashboard
+      summary: Get workspace dashboard summary
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardSummary'
+
+  /workspaces/{workspaceId}/recent-activity:
+    get:
+      tags: [Workspaces]
+      operationId: getRecentActivity
+      summary: Get recent activity feed
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityItem'
+
+  /workspaces/{workspaceId}/publishing-calendar:
+    get:
+      tags: [Publishing]
+      operationId: getPublishingCalendar
+      summary: Get publishing calendar data
+      parameters:
+        - name: workspaceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: month
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Calendar data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublishingJob'
+
+  # ADMIN
+  /admin/stats:
+    get:
+      tags: [Admin]
+      operationId: getAdminStats
+      summary: Get admin platform stats
+      responses:
+        '200':
+          description: Admin stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStats'
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      operationId: adminListUsers
+      summary: Admin list users
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUsersResponse'
+
+  /admin/ai-jobs:
+    get:
+      tags: [Admin]
+      operationId: adminListAiJobs
+      summary: Admin list AI jobs
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: AI jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiJob'
+
+components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — `Bearer <sid>`.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    SuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
+    # AUTH
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+        code_verifier:
+          type: string
+        redirect_uri:
+          type: string
+        state:
+          type: string
+        nonce:
+          type: string
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    EmailPasswordLoginBody:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    EmailPasswordSignUpBody:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        firstName:
+          type: string
+        lastName:
+          type: string
+
+    # ORGANIZATIONS
+    Organization:
+      type: object
+      required: [id, name, slug, plan, ownerId, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+        plan:
+          type: string
+        ownerId:
+          type: string
+        creditsBalance:
+          type: number
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreateOrganizationBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+    UpdateOrganizationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        logoUrl:
+          type: ["string", "null"]
+
+    # WORKSPACES
+    Workspace:
+      type: object
+      required: [id, orgId, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        orgId:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        defaultBrandKitId:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreateWorkspaceBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    UpdateWorkspaceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        defaultBrandKitId:
+          type: ["string", "null"]
+
+    # MEMBERS
+    Member:
+      type: object
+      required: [id, userId, orgId, role, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        orgId:
+          type: string
+        role:
+          type: string
+        email:
+          type: ["string", "null"]
+        firstName:
+          type: ["string", "null"]
+        lastName:
+          type: ["string", "null"]
+        profileImageUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+    InviteMemberBody:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+        role:
+          type: string
+    UpdateMemberRoleBody:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+
+    # BRAND KITS
+    BrandKit:
+      type: object
+      required: [id, workspaceId, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        name:
+          type: string
+        colors:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        logoUrl:
+          type: ["string", "null"]
+        tone:
+          type: ["string", "null"]
+        audience:
+          type: ["string", "null"]
+        forbiddenTerms:
+          type: array
+          items:
+            type: string
+        styleNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreateBrandKitBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        colors:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        logoUrl:
+          type: string
+        tone:
+          type: string
+        audience:
+          type: string
+    UpdateBrandKitBody:
+      type: object
+      properties:
+        name:
+          type: string
+        colors:
+          type: array
+          items:
+            type: string
+        fonts:
+          type: array
+          items:
+            type: string
+        logoUrl:
+          type: ["string", "null"]
+        tone:
+          type: ["string", "null"]
+        audience:
+          type: ["string", "null"]
+        forbiddenTerms:
+          type: array
+          items:
+            type: string
+        styleNotes:
+          type: ["string", "null"]
+
+    # PROJECTS
+    Project:
+      type: object
+      required: [id, workspaceId, name, type, status, createdById, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [video, image, carousel, ad, thumbnail, product_mockup, campaign, template, asset_only]
+        status:
+          type: string
+          enum: [draft, in_progress, review, approved, published, archived]
+        platform:
+          type: ["string", "null"]
+        aspectRatio:
+          type: ["string", "null"]
+        duration:
+          type: ["number", "null"]
+        language:
+          type: ["string", "null"]
+        brandKitId:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        isArchived:
+          type: boolean
+        createdById:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreateProjectBody:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        platform:
+          type: string
+        aspectRatio:
+          type: string
+        duration:
+          type: number
+        language:
+          type: string
+        brandKitId:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+    UpdateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        platform:
+          type: ["string", "null"]
+        aspectRatio:
+          type: ["string", "null"]
+        duration:
+          type: ["number", "null"]
+        language:
+          type: ["string", "null"]
+        brandKitId:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+
+    # VIDEO EDITOR
+    TimelineDocument:
+      type: object
+      required: [id, projectId, version, durationMs, updatedAt]
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        version:
+          type: integer
+        durationMs:
+          type: number
+        tracks:
+          type: array
+          items:
+            type: object
+        captions:
+          type: array
+          items:
+            type: object
+        audioMix:
+          type: object
+        exportSettings:
+          type: object
+        updatedAt:
+          type: string
+    SaveTimelineBody:
+      type: object
+      required: [tracks, durationMs]
+      properties:
+        durationMs:
+          type: number
+        tracks:
+          type: array
+          items:
+            type: object
+        captions:
+          type: array
+          items:
+            type: object
+        audioMix:
+          type: object
+        exportSettings:
+          type: object
+
+    # IMAGE EDITOR
+    CanvasDocument:
+      type: object
+      required: [id, projectId, version, updatedAt]
+      properties:
+        id:
+          type: string
+        projectId:
+          type: string
+        version:
+          type: integer
+        pages:
+          type: array
+          items:
+            type: object
+        sharedAssets:
+          type: array
+          items:
+            type: string
+        brandKitId:
+          type: ["string", "null"]
+        updatedAt:
+          type: string
+    SaveCanvasBody:
+      type: object
+      required: [pages]
+      properties:
+        pages:
+          type: array
+          items:
+            type: object
+        sharedAssets:
+          type: array
+          items:
+            type: string
+        brandKitId:
+          type: ["string", "null"]
+
+    # ASSETS
+    Asset:
+      type: object
+      required: [id, workspaceId, name, type, url, source, aiGenerated, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [image, video, audio, document, other]
+        url:
+          type: string
+        thumbnailUrl:
+          type: ["string", "null"]
+        mimeType:
+          type: ["string", "null"]
+        fileSize:
+          type: ["number", "null"]
+        width:
+          type: ["number", "null"]
+        height:
+          type: ["number", "null"]
+        duration:
+          type: ["number", "null"]
+        source:
+          type: string
+          enum: [uploaded, generated, stock, licensed]
+        aiGenerated:
+          type: boolean
+        providerKey:
+          type: ["string", "null"]
+        promptId:
+          type: ["string", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        folder:
+          type: ["string", "null"]
+        isFavorite:
+          type: boolean
+        commercialUseAllowed:
+          type: ["boolean", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    UpdateAssetBody:
+      type: object
+      properties:
+        name:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        folder:
+          type: ["string", "null"]
+        isFavorite:
+          type: boolean
+    GetUploadUrlBody:
+      type: object
+      required: [fileName, mimeType, workspaceId]
+      properties:
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        workspaceId:
+          type: string
+        folder:
+          type: string
+    UploadUrlResponse:
+      type: object
+      required: [uploadUrl, assetId, key]
+      properties:
+        uploadUrl:
+          type: string
+        assetId:
+          type: string
+        key:
+          type: string
+
+    # AI JOBS
+    AiJob:
+      type: object
+      required: [id, workspaceId, taskType, status, creditsEstimated, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        projectId:
+          type: ["string", "null"]
+        taskType:
+          type: string
+        status:
+          type: string
+          enum: [draft, queued, running, succeeded, failed, cancelled, blocked, setup_required]
+        providerKey:
+          type: ["string", "null"]
+        modelKey:
+          type: ["string", "null"]
+        prompt:
+          type: ["string", "null"]
+        outputAssetIds:
+          type: array
+          items:
+            type: string
+        creditsEstimated:
+          type: number
+        creditsFinal:
+          type: ["number", "null"]
+        errorMessage:
+          type: ["string", "null"]
+        setupRequiredInfo:
+          type: ["object", "null"]
+        progressPercent:
+          type: ["number", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreateAiJobBody:
+      type: object
+      required: [taskType, prompt]
+      properties:
+        taskType:
+          type: string
+        prompt:
+          type: string
+        negativePrompt:
+          type: string
+        projectId:
+          type: string
+        providerKey:
+          type: string
+        modelKey:
+          type: string
+        referenceAssetIds:
+          type: array
+          items:
+            type: string
+        parameters:
+          type: object
+    GeneratePlanBody:
+      type: object
+      required: [brief]
+      properties:
+        brief:
+          type: string
+        platform:
+          type: string
+        tone:
+          type: string
+        audience:
+          type: string
+        duration:
+          type: number
+        brandKitId:
+          type: string
+    ProjectPlan:
+      type: object
+      required: [projectId, hooks, script, scenes, creditEstimate, updatedAt]
+      properties:
+        projectId:
+          type: string
+        hooks:
+          type: array
+          items:
+            type: object
+        script:
+          type: ["object", "null"]
+        scenes:
+          type: array
+          items:
+            type: object
+        layoutPlan:
+          type: ["object", "null"]
+        promptPack:
+          type: array
+          items:
+            type: object
+        creditEstimate:
+          type: number
+        safetyWarnings:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+
+    # TEMPLATES
+    Template:
+      type: object
+      required: [id, name, type, category, thumbnailUrl, createdAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: ["string", "null"]
+        name:
+          type: string
+        type:
+          type: string
+        category:
+          type: string
+        thumbnailUrl:
+          type: string
+        isSystem:
+          type: boolean
+        isBrandLocked:
+          type: boolean
+        createdAt:
+          type: string
+
+    # SOCIAL ACCOUNTS
+    SocialAccount:
+      type: object
+      required: [id, workspaceId, platform, accountName, status, createdAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        platform:
+          type: string
+          enum: [youtube, tiktok, instagram, facebook, linkedin, twitter, pinterest]
+        accountName:
+          type: string
+        accountId:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, expired, revoked, error]
+        scopes:
+          type: array
+          items:
+            type: string
+        tokenExpiresAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    # PUBLISHING JOBS
+    PublishingJob:
+      type: object
+      required: [id, workspaceId, projectId, platform, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        workspaceId:
+          type: string
+        projectId:
+          type: string
+        assetId:
+          type: ["string", "null"]
+        socialAccountId:
+          type: ["string", "null"]
+        platform:
+          type: string
+        status:
+          type: string
+          enum: [draft, preflight_pending, preflight_passed, preflight_failed, scheduled, publishing, published, failed, cancelled]
+        scheduledAt:
+          type: ["string", "null"]
+        publishedAt:
+          type: ["string", "null"]
+        platformPostId:
+          type: ["string", "null"]
+        metadata:
+          type: ["object", "null"]
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    CreatePublishingJobBody:
+      type: object
+      required: [projectId, platform]
+      properties:
+        projectId:
+          type: string
+        assetId:
+          type: string
+        socialAccountId:
+          type: string
+        platform:
+          type: string
+        scheduledAt:
+          type: string
+        metadata:
+          type: object
+
+    # ANALYTICS
+    WorkspaceAnalytics:
+      type: object
+      required: [workspaceId, period]
+      properties:
+        workspaceId:
+          type: string
+        period:
+          type: object
+        projectsCreated:
+          type: integer
+        assetsGenerated:
+          type: integer
+        publishingSuccessRate:
+          type: number
+        totalCreditsUsed:
+          type: number
+        topPlatforms:
+          type: array
+          items:
+            type: object
+        postPerformance:
+          type: array
+          items:
+            type: object
+    ProjectAnalytics:
+      type: object
+      required: [projectId]
+      properties:
+        projectId:
+          type: string
+        views:
+          type: ["integer", "null"]
+        likes:
+          type: ["integer", "null"]
+        comments:
+          type: ["integer", "null"]
+        shares:
+          type: ["integer", "null"]
+        watchTime:
+          type: ["number", "null"]
+        publishedPosts:
+          type: array
+          items:
+            type: object
+    AnalyticsRecommendation:
+      type: object
+      required: [id, type, title, reason, impact]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        reason:
+          type: string
+        impact:
+          type: string
+        action:
+          type: ["string", "null"]
+
+    # BILLING
+    BillingInfo:
+      type: object
+      required: [orgId, plan, creditsBalance, creditsUsedThisPeriod, periodEnd]
+      properties:
+        orgId:
+          type: string
+        plan:
+          type: string
+        creditsBalance:
+          type: number
+        creditsUsedThisPeriod:
+          type: number
+        periodEnd:
+          type: ["string", "null"]
+        seats:
+          type: integer
+        seatsUsed:
+          type: integer
+        stripeCustomerId:
+          type: ["string", "null"]
+        stripeSubscriptionId:
+          type: ["string", "null"]
+        invoices:
+          type: array
+          items:
+            type: object
+    UsageLedger:
+      type: object
+      required: [orgId, totalCredits, entries]
+      properties:
+        orgId:
+          type: string
+        totalCredits:
+          type: number
+        entries:
+          type: array
+          items:
+            type: object
+    CreateCheckoutBody:
+      type: object
+      required: [planKey]
+      properties:
+        planKey:
+          type: string
+        seats:
+          type: integer
+    CheckoutResponse:
+      type: object
+      required: [url, setupRequired]
+      properties:
+        url:
+          type: ["string", "null"]
+        setupRequired:
+          type: boolean
+        message:
+          type: ["string", "null"]
+    Plan:
+      type: object
+      required: [key, name, creditsPerMonth, priceMonthly, features]
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        creditsPerMonth:
+          type: integer
+        priceMonthly:
+          type: number
+        priceAnnual:
+          type: ["number", "null"]
+        seats:
+          type: integer
+        features:
+          type: array
+          items:
+            type: string
+
+    # PROVIDERS
+    ProviderConfig:
+      type: object
+      required: [providerKey, configured, taskTypes, createdAt]
+      properties:
+        providerKey:
+          type: string
+        name:
+          type: string
+        configured:
+          type: boolean
+        taskTypes:
+          type: array
+          items:
+            type: string
+        isDefault:
+          type: boolean
+        priority:
+          type: integer
+        dailyLimit:
+          type: ["integer", "null"]
+        health:
+          $ref: '#/components/schemas/ProviderHealth'
+        createdAt:
+          type: string
+    ProviderHealth:
+      type: object
+      required: [configured, available]
+      properties:
+        configured:
+          type: boolean
+        available:
+          type: boolean
+        quotaRemaining:
+          type: ["integer", "null"]
+        message:
+          type: ["string", "null"]
+        lastCheckedAt:
+          type: ["string", "null"]
+    SaveProviderConfigBody:
+      type: object
+      required: [providerKey]
+      properties:
+        providerKey:
+          type: string
+        apiKey:
+          type: string
+        isDefault:
+          type: boolean
+        priority:
+          type: integer
+        dailyLimit:
+          type: integer
+
+    # DASHBOARD
+    DashboardSummary:
+      type: object
+      required: [workspaceId, projectCounts, recentProjects, creditsUsed, scheduledPosts, providerStatus]
+      properties:
+        workspaceId:
+          type: string
+        projectCounts:
+          type: object
+        recentProjects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+        creditsUsed:
+          type: number
+        creditsBalance:
+          type: number
+        scheduledPosts:
+          type: integer
+        providerStatus:
+          type: object
+        activeJobs:
+          type: integer
+    ActivityItem:
+      type: object
+      required: [id, type, message, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        message:
+          type: string
+        userId:
+          type: ["string", "null"]
+        projectId:
+          type: ["string", "null"]
+        assetId:
+          type: ["string", "null"]
+        metadata:
+          type: object
+        createdAt:
+          type: string
+
+    # ADMIN
+    AdminStats:
+      type: object
+      required: [totalUsers, totalOrgs, totalProjects, totalAiJobs, activeJobs, totalCreditsUsed]
+      properties:
+        totalUsers:
+          type: integer
+        totalOrgs:
+          type: integer
+        totalProjects:
+          type: integer
+        totalAiJobs:
+          type: integer
+        activeJobs:
+          type: integer
+        totalCreditsUsed:
+          type: number
+        failedJobsLast24h:
+          type: integer
+        publishingSuccessRate:
+          type: number
+    AdminUsersResponse:
+      type: object
+      required: [users, total]
+      properties:
+        users:
+          type: array
+          items:
+            type: object
+        total:
+          type: integer
